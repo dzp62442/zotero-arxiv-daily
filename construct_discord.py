@@ -125,6 +125,26 @@ def create_forum_post(webhook_url: str, papers: list[ArxivPaper]) -> str:
         logger.info(f"Created empty forum post, thread_id: {thread_id}")
         return thread_id
 
+    # 第一条消息（主楼）：仅创建帖子并报告概要信息
+    score_high = sum(1 for p in papers if p.score is not None and p.score >= 7.5)
+    score_mid = sum(1 for p in papers if p.score is not None and 6.5 <= p.score < 7.5)
+    score_low = len(papers) - score_high - score_mid
+
+    summary_lines = [
+        f"**Daily arXiv {today}** — 共 {len(papers)} 篇论文",
+        "",
+        f"🔴 高相关度 (≥7.5): {score_high} 篇",
+        f"🟠 中相关度 (≥6.5): {score_mid} 篇",
+        f"🔵 低相关度 (<6.5): {score_low} 篇",
+    ]
+    first_payload = {
+        "thread_name": f"📄 Daily arXiv {today}",
+        "content": "\n".join(summary_lines),
+    }
+    data = _post_webhook(webhook_url, first_payload)
+    thread_id = data["channel_id"]
+    logger.info(f"Created forum post, thread_id: {thread_id}")
+
     # 分批构建 embeds
     batches = []
     for i in range(0, len(papers), PAPERS_PER_MESSAGE):
@@ -133,19 +153,9 @@ def create_forum_post(webhook_url: str, papers: list[ArxivPaper]) -> str:
             batch_embeds.append(render_paper_embed(paper, i + j + 1))
         batches.append(batch_embeds)
 
-    # 第一条消息：创建帖子
-    first_payload = {
-        "thread_name": f"📄 Daily arXiv {today}",
-        "content": f"**Daily arXiv {today}** — 共 {len(papers)} 篇论文",
-        "embeds": batches[0],
-    }
-    data = _post_webhook(webhook_url, first_payload)
-    thread_id = data["channel_id"]
-    logger.info(f"Created forum post, thread_id: {thread_id}")
-
-    # 后续消息：追加到帖子
+    # 后续消息：追加论文到帖子
     thread_url = f"{webhook_url}?thread_id={thread_id}&wait=true"
-    for idx, batch in enumerate(batches[1:], start=2):
+    for idx, batch in enumerate(batches, start=1):
         time.sleep(1)  # 避免速率限制
         payload = {"embeds": batch}
         _post_webhook(thread_url, payload)
