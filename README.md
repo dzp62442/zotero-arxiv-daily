@@ -1,3 +1,30 @@
+# Fork 说明
+
+本仓库 fork 自 [TideDra/zotero-arxiv-daily](https://github.com/TideDra/zotero-arxiv-daily)，在上游功能基础上增加了 Discord 论坛频道输出支持。
+
+## 与上游的差异
+
+- 新增 `construct_discord.py`：通过 Discord Webhook 将论文推送到论坛频道，每 5 篇一条消息，使用 embed 格式展示
+- 修改 `main.py`：新增 `--output` 和 `--discord_webhook_url` 参数，支持在邮件和 Discord 之间切换输出方式
+- 修改 `.github/workflows/main.yml`：新增 `OUTPUT` 和 `DISCORD_WEBHOOK_URL` 环境变量
+
+## 新增配置
+
+在 GitHub Actions 中额外配置以下内容即可启用 Discord 输出：
+
+| Key | 位置 | 说明 |
+| :--- | :--- | :--- |
+| `DISCORD_WEBHOOK_URL` | Secrets | Discord 论坛频道的 Webhook URL |
+| `OUTPUT_METHOD` | Variables | 设为 `discord` 启用论坛输出，不设置或设为 `email` 则保持邮件输出 |
+
+## 同步上游
+
+直接在 main 分支开发，上游更新时通过 GitHub 页面 Sync fork 或手动 `git pull` 合并。新增文件不会冲突，`main.py` 改动集中在末尾，冲突概率低。
+
+不使用 `REPOSITORY` 变量（会覆盖本地改动）。
+
+---
+
 <p align="center">
   <a href="" rel="noopener">
  <img width=200px height=200px src="assets/logo.svg" alt="logo"></a>

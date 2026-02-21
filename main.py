@@ -155,6 +155,8 @@ if __name__ == '__main__':
         help="Language of TLDR",
         default="English",
     )
+    add_argument('--output', type=str, help='Output method: email or discord', default='email')
+    add_argument('--discord_webhook_url', type=str, help='Discord webhook URL for forum posting', default=None)
     parser.add_argument('--debug', action='store_true', help='Debug mode')
     args = parser.parse_args()
     assert (
@@ -193,8 +195,15 @@ if __name__ == '__main__':
             logger.info("Using Local LLM as global LLM.")
             set_global_llm(lang=args.language)
 
-    html = render_email(papers)
-    logger.info("Sending email...")
-    send_email(args.sender, args.receiver, args.sender_password, args.smtp_server, args.smtp_port, html)
-    logger.success("Email sent successfully! If you don't receive the email, please check the configuration and the junk box.")
+    if args.output == 'discord':
+        assert args.discord_webhook_url is not None, "Discord webhook URL is required when --output=discord"
+        from construct_discord import create_forum_post
+        logger.info("Posting to Discord forum...")
+        thread_id = create_forum_post(args.discord_webhook_url, papers)
+        logger.success(f"Posted to Discord forum, thread_id: {thread_id}")
+    else:
+        html = render_email(papers)
+        logger.info("Sending email...")
+        send_email(args.sender, args.receiver, args.sender_password, args.smtp_server, args.smtp_port, html)
+        logger.success("Email sent successfully! If you don't receive the email, please check the configuration and the junk box.")
 
