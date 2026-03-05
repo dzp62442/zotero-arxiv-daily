@@ -15,7 +15,8 @@ llm:
     key: ${oc.env:OPENAI_API_KEY}
     base_url: ${oc.env:OPENAI_API_BASE}
   generation_kwargs:
-    model: gpt-4o-mini
+    model: Pro/deepseek-ai/DeepSeek-V3.2
+  language: Chinese
 
 source:
   arxiv:
@@ -23,6 +24,10 @@ source:
 
 executor:
   debug: ${oc.env:DEBUG,null}
+  send_empty: false
+  max_workers: 4
+  max_paper_num: 10
+  source: ["arxiv"]
+  reranker: local
   output: ${oc.env:OUTPUT_METHOD,email}
   discord_webhook_url: ${oc.env:DISCORD_WEBHOOK_URL,null}
-  source: ['arxiv']
