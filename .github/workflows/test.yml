@@ -29,7 +29,12 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
           export DEBUG=true
-          printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
-          echo "Use custom config: "
+          if [ -n "${CUSTOM_CONFIG}" ]; then
+            printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
+            echo "Use CUSTOM_CONFIG from GitHub Variables."
+          else
+            echo "CUSTOM_CONFIG is empty, fallback to repository config/custom.yaml."
+          fi
+          echo "Effective config/custom.yaml:"
           cat config/custom.yaml
           uv run src/zotero_arxiv_daily/main.py
