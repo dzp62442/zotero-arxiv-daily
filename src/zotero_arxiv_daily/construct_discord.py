@@ -15,6 +15,18 @@ _SCORE_COLORS = {
     "low": 0x3498DB,
 }
 
+_MAX_TITLE_LEN = 250
+_MAX_DESC_LEN = 3800
+_MAX_FIELD_LEN = 1000
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    if limit <= 3:
+        return text[:limit]
+    return text[: limit - 3] + "..."
+
 
 def get_stars_text(score: float) -> str:
     low, high = 6, 8
@@ -31,8 +43,8 @@ def get_stars_text(score: float) -> str:
 
 def _format_authors(authors: list[str]) -> str:
     if len(authors) <= 5:
-        return ", ".join(authors)
-    return ", ".join(authors[:3] + ["..."] + authors[-2:])
+        return _truncate(", ".join(authors), _MAX_FIELD_LEN)
+    return _truncate(", ".join(authors[:3] + ["..."] + authors[-2:]), _MAX_FIELD_LEN)
 
 
 def _format_affiliations(affiliations: list[str] | None) -> str:
@@ -42,7 +54,7 @@ def _format_affiliations(affiliations: list[str] | None) -> str:
     text = ", ".join(shown)
     if len(affiliations) > 5:
         text += ", ..."
-    return text
+    return _truncate(text, _MAX_FIELD_LEN)
 
 
 def _score_color(score: float | None) -> int:
@@ -70,14 +82,20 @@ def render_paper_embed(paper: Paper, index: int) -> dict:
     if stars:
         fields.append({"name": "Relevance", "value": stars, "inline": True})
     if links_parts:
-        fields.append({"name": "Links", "value": " | ".join(links_parts), "inline": True})
+        fields.append(
+            {
+                "name": "Links",
+                "value": _truncate(" | ".join(links_parts), _MAX_FIELD_LEN),
+                "inline": True,
+            }
+        )
 
     description = paper.tldr or paper.abstract or "No summary available"
 
     return {
-        "title": f"{index}. {paper.title}",
+        "title": _truncate(f"{index}. {paper.title}", _MAX_TITLE_LEN),
         "url": paper.url,
-        "description": f"**TLDR:** {description}",
+        "description": _truncate(f"**TLDR:** {description}", _MAX_DESC_LEN),
         "color": _score_color(paper.score),
         "fields": fields,
     }
