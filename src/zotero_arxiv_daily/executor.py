@@ -99,7 +99,7 @@ class Executor:
             for p in tqdm(reranked_papers):
                 p.generate_tldr(self.openai_client, self.config.llm)
                 p.generate_affiliations(self.openai_client, self.config.llm)
-        elif output != "discord" and not self.config.executor.send_empty:
+        elif output not in {"discord", "feishu"} and not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
             return
 
@@ -123,6 +123,14 @@ class Executor:
             logger.info(f"Posted to Discord forum, thread_id: {thread_id}")
             return
 
+        if output == "feishu":
+            from .construct_feishu import create_topic_post
+
+            logger.info("Posting to Feishu...")
+            message_id = create_topic_post(self.config, reranked_papers)
+            logger.info(f"Posted to Feishu, message_id: {message_id}")
+            return
+
         raise ValueError(
-            f"Unsupported executor.output={output}. Expected 'email' or 'discord'."
+            f"Unsupported executor.output={output}. Expected 'email', 'discord', or 'feishu'."
         )

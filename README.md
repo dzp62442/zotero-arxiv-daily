@@ -8,15 +8,23 @@ This fork is based on [TideDra/zotero-arxiv-daily](https://github.com/TideDra/zo
 - Extended executor output mode via `executor.output`:
   - `email` (default)
   - `discord`
+  - `feishu`
 - Added `executor.discord_webhook_url` for Discord forum posting.
-- Updated workflows to pass `OUTPUT_METHOD` and `DISCORD_WEBHOOK_URL` env vars.
+- Added Feishu app-bot output support:
+  - `feishu.app_id`
+  - `feishu.app_secret`
+  - `executor.feishu_chat_id`
+- Updated workflows to pass `OUTPUT_METHOD`, `DISCORD_WEBHOOK_URL`, and Feishu env vars.
 
-## Extra Variables for Discord
+## Extra Variables for Discord / Feishu
 
 | Key | Location | Description |
 | :--- | :--- | :--- |
 | `DISCORD_WEBHOOK_URL` | GitHub Secrets | Discord forum channel webhook URL |
-| `OUTPUT_METHOD` | GitHub Variables | `discord` to enable Discord output, `email` for email output |
+| `FEISHU_APP_ID` | GitHub Secrets | Feishu self-built app ID |
+| `FEISHU_APP_SECRET` | GitHub Secrets | Feishu self-built app secret |
+| `FEISHU_CHAT_ID` | GitHub Secrets | Feishu target group chat_id (e.g. `oc_xxx`) |
+| `OUTPUT_METHOD` | GitHub Variables | `discord` for Discord output, `feishu` for Feishu output, `email` for email output |
 
 ---
 

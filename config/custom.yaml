@@ -22,6 +22,10 @@ source:
   arxiv:
     category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
 
+feishu:
+  app_id: ${oc.env:FEISHU_APP_ID,null}
+  app_secret: ${oc.env:FEISHU_APP_SECRET,null}
+
 executor:
   debug: ${oc.env:DEBUG,null}
   send_empty: false
@@ -31,3 +35,7 @@ executor:
   reranker: local
   output: ${oc.env:OUTPUT_METHOD,email}
   discord_webhook_url: ${oc.env:DISCORD_WEBHOOK_URL,null}
+  feishu_chat_id: ${oc.env:FEISHU_CHAT_ID,null}
+  feishu_reply_in_thread: true
+  feishu_batch_size: 5
+  feishu_send_complete_marker: true
