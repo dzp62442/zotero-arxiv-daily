@@ -1,5 +1,4 @@
 import datetime
-import math
 import time
 
 import requests
@@ -9,7 +8,7 @@ from .protocol import Paper
 
 PAPERS_PER_MESSAGE = 5
 
-_SCORE_COLORS = {
+_RANK_COLORS = {
     "high": 0xE74C3C,
     "medium": 0xF39C12,
     "low": 0x3498DB,
@@ -28,17 +27,26 @@ def _truncate(text: str, limit: int) -> str:
     return text[: limit - 3] + "..."
 
 
-def get_stars_text(score: float) -> str:
-    low, high = 6, 8
-    if score <= low:
-        return ""
-    if score >= high:
-        return "*" * 5
-    interval = (high - low) / 10
-    star_num = math.ceil((score - low) / interval)
-    full = star_num // 2
-    half = star_num - full * 2
-    return "*" * full + ("+" if half else "")
+def _rank_ratio(index: int, total: int) -> float:
+    if total <= 1:
+        return 1.0
+    return 1.0 - (index - 1) / (total - 1)
+
+
+def _rank_band(index: int, total: int) -> str:
+    ratio = _rank_ratio(index, total)
+    if ratio >= 2 / 3:
+        return "high"
+    if ratio >= 1 / 3:
+        return "medium"
+    return "low"
+
+
+def get_stars_text(index: int, total: int) -> str:
+    ratio = _rank_ratio(index, total)
+    stars = int(round(1 + 4 * ratio))
+    stars = max(1, min(5, stars))
+    return "★" * stars + "☆" * (5 - stars)
 
 
 def _format_authors(authors: list[str]) -> str:
@@ -57,18 +65,12 @@ def _format_affiliations(affiliations: list[str] | None) -> str:
     return _truncate(text, _MAX_FIELD_LEN)
 
 
-def _score_color(score: float | None) -> int:
-    if score is None:
-        return _SCORE_COLORS["low"]
-    if score >= 7.5:
-        return _SCORE_COLORS["high"]
-    if score >= 6.5:
-        return _SCORE_COLORS["medium"]
-    return _SCORE_COLORS["low"]
+def _score_color(index: int, total: int) -> int:
+    return _RANK_COLORS[_rank_band(index, total)]
 
 
-def render_paper_embed(paper: Paper, index: int) -> dict:
-    stars = get_stars_text(paper.score) if paper.score is not None else ""
+def render_paper_embed(paper: Paper, index: int, total: int) -> dict:
+    stars = get_stars_text(index, total)
     links_parts = []
     if paper.pdf_url:
         links_parts.append(f"[PDF]({paper.pdf_url})")
@@ -79,8 +81,14 @@ def render_paper_embed(paper: Paper, index: int) -> dict:
         {"name": "Authors", "value": _format_authors(paper.authors), "inline": False},
         {"name": "Affiliations", "value": _format_affiliations(paper.affiliations), "inline": False},
     ]
-    if stars:
-        fields.append({"name": "Relevance", "value": stars, "inline": True})
+    fields.append({"name": "Relevance", "value": stars, "inline": True})
+    fields.append(
+        {
+            "name": "Score",
+            "value": f"{paper.score:.3f}" if paper.score is not None else "Unknown",
+            "inline": True,
+        }
+    )
     if links_parts:
         fields.append(
             {
@@ -96,7 +104,7 @@ def render_paper_embed(paper: Paper, index: int) -> dict:
         "title": _truncate(f"{index}. {paper.title}", _MAX_TITLE_LEN),
         "url": paper.url,
         "description": _truncate(f"**TLDR:** {description}", _MAX_DESC_LEN),
-        "color": _score_color(paper.score),
+        "color": _score_color(index, total),
         "fields": fields,
     }
 
@@ -136,15 +144,15 @@ def create_forum_post(webhook_url: str, papers: list[Paper]) -> str:
         logger.info(f"Created empty forum post, thread_id: {thread_id}")
         return thread_id
 
-    score_high = sum(1 for p in papers if p.score is not None and p.score >= 7.5)
-    score_mid = sum(1 for p in papers if p.score is not None and 6.5 <= p.score < 7.5)
+    score_high = sum(1 for i in range(1, len(papers) + 1) if _rank_band(i, len(papers)) == "high")
+    score_mid = sum(1 for i in range(1, len(papers) + 1) if _rank_band(i, len(papers)) == "medium")
     score_low = len(papers) - score_high - score_mid
 
     summary_lines = [
         f"Daily arXiv {today} - {len(papers)} papers",
-        f"High relevance (>=7.5): {score_high}",
-        f"Mid relevance (>=6.5): {score_mid}",
-        f"Low relevance (<6.5): {score_low}",
+        f"High relevance (top 1/3): {score_high}",
+        f"Mid relevance (middle 1/3): {score_mid}",
+        f"Low relevance (bottom 1/3): {score_low}",
     ]
     first_payload = {
         "thread_name": f"Daily arXiv {today}",
@@ -158,7 +166,7 @@ def create_forum_post(webhook_url: str, papers: list[Paper]) -> str:
     for i in range(0, len(papers), PAPERS_PER_MESSAGE):
         batch_embeds = []
         for j, paper in enumerate(papers[i : i + PAPERS_PER_MESSAGE]):
-            batch_embeds.append(render_paper_embed(paper, i + j + 1))
+            batch_embeds.append(render_paper_embed(paper, i + j + 1, len(papers)))
         batches.append(batch_embeds)
 
     thread_url = f"{webhook_url}?thread_id={thread_id}&wait=true"

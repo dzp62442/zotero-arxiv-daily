@@ -49,27 +49,61 @@ def _truncate(text: str, limit: int) -> str:
     return text[: limit - 3] + "..."
 
 
+def _rank_ratio(index: int, total: int) -> float:
+    if total <= 1:
+        return 1.0
+    return 1.0 - (index - 1) / (total - 1)
+
+
+def _rank_band(index: int, total: int) -> str:
+    ratio = _rank_ratio(index, total)
+    if ratio >= 2 / 3:
+        return "high"
+    if ratio >= 1 / 3:
+        return "medium"
+    return "low"
+
+
+def _rank_emoji(index: int, total: int) -> str:
+    band = _rank_band(index, total)
+    if band == "high":
+        return "🟥"
+    if band == "medium":
+        return "🟧"
+    return "🟦"
+
+
+def _rank_stars(index: int, total: int) -> str:
+    ratio = _rank_ratio(index, total)
+    stars = int(round(1 + 4 * ratio))
+    stars = max(1, min(5, stars))
+    return "★" * stars + "☆" * (5 - stars)
+
+
 def _build_summary(papers: list[Paper], today: str) -> str:
     if not papers:
         return f"Daily arXiv {today}\nNo new papers today."
 
-    score_high = sum(1 for p in papers if p.score is not None and p.score >= 7.5)
-    score_mid = sum(1 for p in papers if p.score is not None and 6.5 <= p.score < 7.5)
+    total = len(papers)
+    score_high = sum(1 for i in range(1, total + 1) if _rank_band(i, total) == "high")
+    score_mid = sum(1 for i in range(1, total + 1) if _rank_band(i, total) == "medium")
     score_low = len(papers) - score_high - score_mid
     return "\n".join(
         [
-            f"Daily arXiv {today} - {len(papers)} papers",
-            f"High relevance (>=7.5): {score_high}",
-            f"Mid relevance (>=6.5): {score_mid}",
-            f"Low relevance (<6.5): {score_low}",
+            f"✨ Daily arXiv {today} - {len(papers)} papers",
+            f"🟥 High relevance (top 1/3): {score_high}",
+            f"🟧 Mid relevance (middle 1/3): {score_mid}",
+            f"🟦 Low relevance (bottom 1/3): {score_low}",
         ]
     )
 
 
-def _build_paper_text(paper: Paper, index: int) -> str:
+def _build_paper_text(paper: Paper, index: int, total: int) -> str:
     title = _truncate(paper.title.strip(), 180)
     tldr = _truncate((paper.tldr or paper.abstract or "No summary available").strip(), 600)
     score_text = f"{paper.score:.2f}" if paper.score is not None else "N/A"
+    stars = _rank_stars(index, total)
+    emoji = _rank_emoji(index, total)
     authors = _truncate(", ".join(paper.authors[:8]), 260) if paper.authors else "Unknown"
     links = []
     if paper.pdf_url:
@@ -79,7 +113,8 @@ def _build_paper_text(paper: Paper, index: int) -> str:
     links_text = "\n".join(links) if links else "Links: N/A"
     return "\n".join(
         [
-            f"{index}. {title}",
+            f"{emoji} {index}. {title}",
+            f"Relevance: {stars}",
             f"Score: {score_text}",
             f"Authors: {authors}",
             f"TLDR: {tldr}",
@@ -88,8 +123,10 @@ def _build_paper_text(paper: Paper, index: int) -> str:
     )
 
 
-def _build_batch_text(batch: list[Paper], start_index: int) -> str:
-    blocks = [_build_paper_text(paper, start_index + idx) for idx, paper in enumerate(batch)]
+def _build_batch_text(batch: list[Paper], start_index: int, total: int) -> str:
+    blocks = [
+        _build_paper_text(paper, start_index + idx, total) for idx, paper in enumerate(batch)
+    ]
     return "\n\n".join(blocks)
 
 
@@ -222,7 +259,7 @@ def create_topic_post(config, papers: list[Paper]) -> str:
 
     for i in range(0, len(papers), batch_size):
         batch = papers[i : i + batch_size]
-        batch_text = _build_batch_text(batch, i + 1)
+        batch_text = _build_batch_text(batch, i + 1, len(papers))
         time.sleep(1)
         _reply_text_message(token, root_message_id, batch_text, reply_in_thread=reply_in_thread)
         logger.debug(f"Sent Feishu batch {i // batch_size + 1}/{(len(papers) - 1) // batch_size + 1}")
