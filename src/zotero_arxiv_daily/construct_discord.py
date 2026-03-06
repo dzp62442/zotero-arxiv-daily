@@ -8,7 +8,7 @@ from .protocol import Paper
 
 PAPERS_PER_MESSAGE = 5
 
-_RANK_COLORS = {
+_SCORE_COLORS = {
     "high": 0xE74C3C,
     "medium": 0xF39C12,
     "low": 0x3498DB,
@@ -27,26 +27,28 @@ def _truncate(text: str, limit: int) -> str:
     return text[: limit - 3] + "..."
 
 
-def _rank_ratio(index: int, total: int) -> float:
-    if total <= 1:
-        return 1.0
-    return 1.0 - (index - 1) / (total - 1)
-
-
-def _rank_band(index: int, total: int) -> str:
-    ratio = _rank_ratio(index, total)
-    if ratio >= 2 / 3:
+def _score_band(score: float | None) -> str:
+    if score is None:
+        return "low"
+    if score > 9:
         return "high"
-    if ratio >= 1 / 3:
+    if score >= 8:
         return "medium"
     return "low"
 
 
-def get_stars_text(index: int, total: int) -> str:
-    ratio = _rank_ratio(index, total)
-    stars = int(round(1 + 4 * ratio))
-    stars = max(1, min(5, stars))
-    return "★" * stars + "☆" * (5 - stars)
+def get_stars_text(score: float | None) -> str:
+    if score is None:
+        return "Unknown"
+    if score > 9:
+        return "★★★★★"
+    if score >= 8.5:
+        return "★★★★☆"
+    if score >= 8:
+        return "★★★☆☆"
+    if score >= 7:
+        return "★★☆☆☆"
+    return "★☆☆☆☆"
 
 
 def _format_authors(authors: list[str]) -> str:
@@ -65,12 +67,12 @@ def _format_affiliations(affiliations: list[str] | None) -> str:
     return _truncate(text, _MAX_FIELD_LEN)
 
 
-def _score_color(index: int, total: int) -> int:
-    return _RANK_COLORS[_rank_band(index, total)]
+def _score_color(score: float | None) -> int:
+    return _SCORE_COLORS[_score_band(score)]
 
 
-def render_paper_embed(paper: Paper, index: int, total: int) -> dict:
-    stars = get_stars_text(index, total)
+def render_paper_embed(paper: Paper, index: int) -> dict:
+    stars = get_stars_text(paper.score)
     links_parts = []
     if paper.pdf_url:
         links_parts.append(f"[PDF]({paper.pdf_url})")
@@ -104,7 +106,7 @@ def render_paper_embed(paper: Paper, index: int, total: int) -> dict:
         "title": _truncate(f"{index}. {paper.title}", _MAX_TITLE_LEN),
         "url": paper.url,
         "description": _truncate(f"**TLDR:** {description}", _MAX_DESC_LEN),
-        "color": _score_color(index, total),
+        "color": _score_color(paper.score),
         "fields": fields,
     }
 
@@ -144,15 +146,15 @@ def create_forum_post(webhook_url: str, papers: list[Paper]) -> str:
         logger.info(f"Created empty forum post, thread_id: {thread_id}")
         return thread_id
 
-    score_high = sum(1 for i in range(1, len(papers) + 1) if _rank_band(i, len(papers)) == "high")
-    score_mid = sum(1 for i in range(1, len(papers) + 1) if _rank_band(i, len(papers)) == "medium")
+    score_high = sum(1 for p in papers if _score_band(p.score) == "high")
+    score_mid = sum(1 for p in papers if _score_band(p.score) == "medium")
     score_low = len(papers) - score_high - score_mid
 
     summary_lines = [
         f"Daily arXiv {today} - {len(papers)} papers",
-        f"High relevance (top 1/3): {score_high}",
-        f"Mid relevance (middle 1/3): {score_mid}",
-        f"Low relevance (bottom 1/3): {score_low}",
+        f"High relevance (>9): {score_high}",
+        f"Mid relevance (8-9): {score_mid}",
+        f"Low relevance (<8): {score_low}",
     ]
     first_payload = {
         "thread_name": f"Daily arXiv {today}",
@@ -166,7 +168,7 @@ def create_forum_post(webhook_url: str, papers: list[Paper]) -> str:
     for i in range(0, len(papers), PAPERS_PER_MESSAGE):
         batch_embeds = []
         for j, paper in enumerate(papers[i : i + PAPERS_PER_MESSAGE]):
-            batch_embeds.append(render_paper_embed(paper, i + j + 1, len(papers)))
+            batch_embeds.append(render_paper_embed(paper, i + j + 1))
         batches.append(batch_embeds)
 
     thread_url = f"{webhook_url}?thread_id={thread_id}&wait=true"
