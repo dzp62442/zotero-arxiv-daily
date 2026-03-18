@@ -1,5 +1,6 @@
 import datetime
 import json
+import math
 import time
 from uuid import uuid4
 
@@ -71,15 +72,21 @@ def _score_emoji(score: float | None) -> str:
 def _score_stars(score: float | None) -> str:
     if score is None:
         return "Unknown"
-    if score > 9:
+    low = 6
+    high = 8
+    if score <= low:
+        return ""
+    if score >= high:
         return "★★★★★"
-    if score >= 8.5:
-        return "★★★★☆"
-    if score >= 8:
-        return "★★★☆☆"
-    if score >= 7:
-        return "★★☆☆☆"
-    return "★☆☆☆☆"
+
+    interval = (high - low) / 10
+    star_num = math.ceil((score - low) / interval)
+    full_star_num = star_num // 2
+    half_star_num = star_num - full_star_num * 2
+    stars = "★" * full_star_num
+    if half_star_num:
+        stars += "½"
+    return stars
 
 
 def _build_summary(papers: list[Paper], today: str) -> str:
