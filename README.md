@@ -69,7 +69,7 @@ This fork is based on [TideDra/zotero-arxiv-daily](https://github.com/TideDra/zo
 - List of papers sorted by relevance with your recent research interest.
 - Fast deployment via fork this repo and set environment variables in the Github Action Page.
 - Support LLM API for generating TL;DR of papers.
-- Ignore unwanted Zotero papers using glob pattern.
+- Ignore unwanted Zotero papers using a list of glob patterns.
 - Support multiple sources of papers to retrieve:
   - arxiv
   - biorxiv
@@ -106,7 +106,7 @@ Paste the following content into the value of `CUSTOM_CONFIG` variable:
 zotero:
   user_id: ${oc.env:ZOTERO_ID}
   api_key: ${oc.env:ZOTERO_KEY}
-  include_path: null
+  include_path: null # Or e.g. ["2026/survey/**", "2026/reading-group/**"]
 
 email:
   sender: ${oc.env:SENDER}
@@ -127,9 +127,23 @@ source:
     category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
     include_cross_list: false # Set to true to include arXiv cross-list papers in these categories.
 
+feishu:
+  app_id: ${oc.env:FEISHU_APP_ID,null}
+  app_secret: ${oc.env:FEISHU_APP_SECRET,null}
+
 executor:
   debug: ${oc.env:DEBUG,null}
+  send_empty: false
+  max_workers: 4
+  max_paper_num: 10
   source: ['arxiv']
+  reranker: local
+  output: ${oc.env:OUTPUT_METHOD,email}
+  discord_webhook_url: ${oc.env:DISCORD_WEBHOOK_URL,null}
+  feishu_chat_id: ${oc.env:FEISHU_CHAT_ID,null}
+  feishu_reply_in_thread: true
+  feishu_batch_size: 5
+  feishu_send_complete_marker: true
 ```
 Set `source.arxiv.include_cross_list: true` if you want cross-listed papers included.
 >[!NOTE]
@@ -140,7 +154,7 @@ Here is the full configuration, `???` means the value must be filled in:
 zotero:
   user_id: ??? # User ID of your Zotero account.
   api_key: ??? # An Zotero API key with read access.
-  include_path: null # A glob pattern marking the Zotero collections that should be included. Example: "2026/survey/**"
+  include_path: null # A list of glob patterns marking the Zotero collections that should be included. Example: ["2026/survey/**", "2026/reading-group/**"]
 
 source:
   arxiv:
@@ -181,11 +195,21 @@ reranker:
     model: null # The model name of the embedding model. Example: text-embedding-3-large
     batch_size: null # The batch size for embedding API requests. Adjust to match your provider's limit. Example: 64
 
+feishu:
+  app_id: null # Feishu app ID. Required when output=feishu.
+  app_secret: null # Feishu app secret. Required when output=feishu.
+
 executor:
   debug: false # Whether to use debug mode. Example: true
   send_empty: false # Whether to send an empty email even if no new papers today. Example: true
   max_workers: 4 # Concurrent workers for processing papers. Example: 4
   max_paper_num: 100 # The maximum number of the papers presented in the email. Example: 100
+  output: email # Output method. One of: email, discord, feishu. Example: feishu
+  discord_webhook_url: null # Discord forum channel webhook URL. Required when output=discord.
+  feishu_chat_id: null # Feishu group chat_id. Required when output=feishu.
+  feishu_reply_in_thread: true # Whether to reply in thread when posting follow-up messages.
+  feishu_batch_size: 5 # Number of papers per follow-up message.
+  feishu_send_complete_marker: true # Whether to send ARXIV_DAILY_COMPLETE marker at the end.
   source: ??? # The sources of papers to retrieve. Example: ['arxiv','biorxiv','medrxiv']
   reranker: local # The reranker to use. Example: 'local' or 'api'
 ```
