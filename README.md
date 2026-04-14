@@ -202,7 +202,6 @@ feishu:
 executor:
   debug: false # Whether to use debug mode. Example: true
   send_empty: false # Whether to send an empty email even if no new papers today. Example: true
-  max_workers: 4 # Concurrent workers for processing papers. Example: 4
   max_paper_num: 100 # The maximum number of the papers presented in the email. Example: 100
   output: email # Output method. One of: email, discord, feishu. Example: feishu
   discord_webhook_url: null # Discord forum channel webhook URL. Required when output=discord.
