@@ -39,11 +39,15 @@ def _base_config():
                 "reranker.api.key=sk-fake",
                 "reranker.api.base_url=http://localhost:30000/v1",
                 "reranker.api.model=text-embedding-3-large",
+                "reranker.local.device=cpu",
                 "source.arxiv.category=[cs.AI,cs.CV]",
                 "executor.source=[arxiv]",
                 "executor.reranker=api",
                 "executor.debug=false",
                 "executor.send_empty=false",
+                "output.mode=markdown",
+                "output.dir=outputs",
+                "output.filename_template=daily-arxiv-{date}.md",
             ],
         )
     return cfg

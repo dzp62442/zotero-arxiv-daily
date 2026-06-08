@@ -1,3 +1,35 @@
+---
+
+## 本地个人部署
+
+---
+
+### 1. 创建 conda 环境
+
+```bash
+conda create -n zotero-arxiv-daily python=3.13 -y
+conda activate zotero-arxiv-daily
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt
+```
+
+### 2. 配置
+
+- `.env`：放 Zotero 和 LLM API 配套变量，不同步。
+- `config/custom.yaml`：放个人可同步配置，密钥用 `${oc.env:XXX}` 从 `.env` 读取。
+- 4090 + CUDA 11.8：默认安装 `torch==2.7.1` cu118，并设置 `reranker.local.device: cuda`。
+- 默认生成 Markdown，不发邮件；输出到 `outputs/`，不同步。
+
+### 3. 运行
+
+```bash
+PYTHONPATH=src python -m zotero_arxiv_daily.main
+```
+
+输出文件示例：`outputs/daily-arxiv-2026-06-08.md`。
+
+---
+
 <p align="center">
   <a href="" rel="noopener">
  <img width=200px height=200px src="assets/logo.svg" alt="logo"></a>

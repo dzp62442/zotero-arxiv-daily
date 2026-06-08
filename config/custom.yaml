@@ -2,25 +2,32 @@ zotero:
   user_id: ${oc.env:ZOTERO_ID}
   api_key: ${oc.env:ZOTERO_KEY}
   include_path: null # Or set a list of glob patterns, e.g. ["2026/survey/**","2026/reading-group/**"]
-
-email:
-  sender: ${oc.env:SENDER}
-  receiver: ${oc.env:RECEIVER}
-  smtp_server: smtp.qq.com
-  smtp_port: 465
-  sender_password: ${oc.env:SENDER_PASSWORD}
+  ignore_path: null # Or set a list of glob patterns, e.g. ["archive/**"]
 
 llm:
   api:
     key: ${oc.env:OPENAI_API_KEY}
     base_url: ${oc.env:OPENAI_API_BASE}
   generation_kwargs:
-    model: gpt-4o-mini
+    model: deepseek-v4-flash
+
+reranker:
+  local:
+    device: cuda
 
 source:
   arxiv:
-    category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
+    category: ["cs.AI","cs.CV","cs.RO"]
+    include_cross_list: false
 
 executor:
-  debug: ${oc.env:DEBUG,null}
+  debug: false
+  send_empty: true
+  max_paper_num: 10
   source: ['arxiv']
+  reranker: local
+
+output:
+  mode: markdown
+  dir: outputs
+  filename_template: "daily-arxiv-{date}.md"
