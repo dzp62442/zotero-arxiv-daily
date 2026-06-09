@@ -98,9 +98,18 @@ class Executor:
             logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
             return
         all_papers = []
+        download_stats = {}
         for source, retriever in self.retrievers.items():
             logger.info(f"Retrieving {source} papers...")
             papers = retriever.retrieve_papers()
+            if hasattr(retriever, "download_stats"):
+                stats = retriever.download_stats.to_dict()
+                download_stats[source] = stats
+                logger.info(
+                    f"{source} downloaded {stats['total_bytes']} bytes "
+                    f"(source tar: {stats.get('source_tar_bytes', 0)}, "
+                    f"PDF: {stats.get('pdf_bytes', 0)}, HTML: {stats.get('html_bytes', 0)})"
+                )
             if len(papers) == 0:
                 logger.info(f"No {source} papers found")
                 continue
@@ -123,7 +132,7 @@ class Executor:
         output_mode = self.config.get("output", {}).get("mode", "email")
         if output_mode == "markdown":
             logger.info("Writing markdown report...")
-            markdown_content = render_markdown(reranked_papers)
+            markdown_content = render_markdown(reranked_papers, download_stats=download_stats)
             output_path = write_markdown_report(self.config, markdown_content)
             logger.info(f"Markdown report written to {output_path}")
         elif output_mode == "email":

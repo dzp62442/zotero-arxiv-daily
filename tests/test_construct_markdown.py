@@ -8,9 +8,22 @@ from zotero_arxiv_daily.construct_markdown import render_markdown, write_markdow
 
 def test_render_markdown_with_papers():
     papers = [make_sample_paper(score=7.5, tldr="A great paper.", affiliations=["MIT"])]
-    markdown = render_markdown(papers, generated_at=datetime(2026, 6, 8, 10, 0, 0))
+    markdown = render_markdown(
+        papers,
+        generated_at=datetime(2026, 6, 8, 10, 0, 0),
+        download_stats={
+            "arxiv": {
+                "source_tar_bytes": 1024,
+                "pdf_bytes": 2048,
+                "html_bytes": 512,
+                "total_bytes": 3584,
+            }
+        },
+    )
 
     assert "# Zotero arXiv Daily - 2026-06-08" in markdown
+    assert "Download Traffic" in markdown
+    assert "3.5 KiB" in markdown
     assert "Sample Paper Title" in markdown
     assert "A great paper." in markdown
     assert "MIT" in markdown

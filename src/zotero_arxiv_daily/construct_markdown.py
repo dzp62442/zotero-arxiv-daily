@@ -27,7 +27,21 @@ def _format_affiliations(affiliations: list[str] | None) -> str:
     return ", ".join(visible_affiliations) + suffix
 
 
-def render_markdown(papers: list[Paper], generated_at: datetime | None = None) -> str:
+def _format_bytes(size: int) -> str:
+    units = ["B", "KiB", "MiB", "GiB"]
+    value = float(size)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def render_markdown(
+    papers: list[Paper],
+    generated_at: datetime | None = None,
+    download_stats: dict[str, dict[str, int]] | None = None,
+) -> str:
     generated_at = generated_at or datetime.now()
     today = generated_at.strftime("%Y-%m-%d")
     count_text = f"{len(papers)} papers" if len(papers) != 1 else "1 paper"
@@ -41,6 +55,7 @@ def render_markdown(papers: list[Paper], generated_at: datetime | None = None) -
 
     if not papers:
         lines.extend(["## No Papers Today", "", "Take a rest.", ""])
+        _append_download_stats(lines, download_stats)
         return "\n".join(lines)
 
     for index, paper in enumerate(papers, start=1):
@@ -68,7 +83,26 @@ def render_markdown(papers: list[Paper], generated_at: datetime | None = None) -
             ]
         )
 
+    _append_download_stats(lines, download_stats)
     return "\n".join(lines)
+
+
+def _append_download_stats(lines: list[str], download_stats: dict[str, dict[str, int]] | None) -> None:
+    if not download_stats:
+        return
+
+    lines.extend(["## Download Traffic", ""])
+    for source, stats in download_stats.items():
+        total_bytes = stats.get("total_bytes", 0)
+        lines.extend(
+            [
+                f"- **{source}:** {_format_bytes(total_bytes)}",
+                f"  - Source tar: {_format_bytes(stats.get('source_tar_bytes', 0))}",
+                f"  - PDF fallback: {_format_bytes(stats.get('pdf_bytes', 0))}",
+                f"  - HTML fallback: {_format_bytes(stats.get('html_bytes', 0))}",
+            ]
+        )
+    lines.append("")
 
 
 def write_markdown_report(config: DictConfig, markdown: str, generated_at: datetime | None = None) -> Path:

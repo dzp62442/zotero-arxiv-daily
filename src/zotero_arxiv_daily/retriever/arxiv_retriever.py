@@ -8,6 +8,7 @@ import feedparser
 from tqdm import tqdm
 import multiprocessing
 import os
+from dataclasses import dataclass
 from queue import Empty
 from time import sleep
 from typing import Any, Callable, TypeVar
@@ -21,13 +22,42 @@ PDF_EXTRACT_TIMEOUT = 180
 TAR_EXTRACT_TIMEOUT = 180
 
 
-def _download_file(url: str, path: str) -> None:
+@dataclass(frozen=True)
+class ExtractionResult:
+    text: str | None
+    downloaded_bytes: int = 0
+    error: str | None = None
+
+
+@dataclass
+class ArxivDownloadStats:
+    source_tar_bytes: int = 0
+    pdf_bytes: int = 0
+    html_bytes: int = 0
+
+    @property
+    def total_bytes(self) -> int:
+        return self.source_tar_bytes + self.pdf_bytes + self.html_bytes
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "source_tar_bytes": self.source_tar_bytes,
+            "pdf_bytes": self.pdf_bytes,
+            "html_bytes": self.html_bytes,
+            "total_bytes": self.total_bytes,
+        }
+
+
+def _download_file(url: str, path: str) -> int:
+    downloaded_bytes = 0
     with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as response:
         response.raise_for_status()
         with open(path, "wb") as file:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 if chunk:
+                    downloaded_bytes += len(chunk)
                     file.write(chunk)
+    return downloaded_bytes
 
 
 def _run_in_subprocess(
@@ -77,14 +107,17 @@ def _run_with_hard_timeout(
     return None
 
 
-def _extract_text_from_pdf_worker(pdf_url: str) -> str:
+def _extract_text_from_pdf_worker(pdf_url: str) -> ExtractionResult:
     with TemporaryDirectory() as temp_dir:
         path = os.path.join(temp_dir, "paper.pdf")
-        _download_file(pdf_url, path)
-        return extract_markdown_from_pdf(path)
+        downloaded_bytes = _download_file(pdf_url, path)
+        try:
+            return ExtractionResult(extract_markdown_from_pdf(path), downloaded_bytes)
+        except Exception as exc:
+            return ExtractionResult(None, downloaded_bytes, f"{type(exc).__name__}: {exc}")
 
 
-def _extract_text_from_html_worker(html_url: str) -> str | None:
+def _extract_text_from_html_worker(html_url: str) -> ExtractionResult:
     import trafilatura
 
     downloaded = trafilatura.fetch_url(html_url)
@@ -92,18 +125,21 @@ def _extract_text_from_html_worker(html_url: str) -> str | None:
         raise ValueError(f"Failed to download HTML from {html_url}")
     text = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
     if not text:
-        raise ValueError(f"No text extracted from {html_url}")
-    return text
+        return ExtractionResult(None, len(downloaded.encode("utf-8")), f"No text extracted from {html_url}")
+    return ExtractionResult(text, len(downloaded.encode("utf-8")))
 
 
-def _extract_text_from_tar_worker(source_url: str, paper_id: str, paper_title: str | None = None) -> str | None:
+def _extract_text_from_tar_worker(source_url: str, paper_id: str, paper_title: str | None = None) -> ExtractionResult:
     with TemporaryDirectory() as temp_dir:
         path = os.path.join(temp_dir, "paper.tar.gz")
-        _download_file(source_url, path)
-        file_contents = extract_tex_code_from_tar(path, paper_id, paper_title=paper_title)
-        if not file_contents or "all" not in file_contents:
-            raise ValueError("Main tex file not found.")
-        return file_contents["all"]
+        downloaded_bytes = _download_file(source_url, path)
+        try:
+            file_contents = extract_tex_code_from_tar(path, paper_id, paper_title=paper_title)
+            if not file_contents or "all" not in file_contents:
+                return ExtractionResult(None, downloaded_bytes, "Main tex file not found.")
+            return ExtractionResult(file_contents["all"], downloaded_bytes)
+        except Exception as exc:
+            return ExtractionResult(None, downloaded_bytes, f"{type(exc).__name__}: {exc}")
 
 
 @register_retriever("arxiv")
@@ -112,6 +148,7 @@ class ArxivRetriever(BaseRetriever):
         super().__init__(config)
         if self.config.source.arxiv.category is None:
             raise ValueError("category must be specified for arxiv.")
+        self.download_stats = ArxivDownloadStats()
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
         client = arxiv.Client(num_retries=10, delay_seconds=10)
@@ -161,11 +198,17 @@ class ArxivRetriever(BaseRetriever):
         authors = [a.name for a in raw_paper.authors]
         abstract = raw_paper.summary
         pdf_url = raw_paper.pdf_url
-        full_text = extract_text_from_tar(raw_paper)
+        tar_result = extract_text_from_tar(raw_paper)
+        self.download_stats.source_tar_bytes += tar_result.downloaded_bytes
+        full_text = tar_result.text
         if full_text is None:
-            full_text = extract_text_from_html(raw_paper)
+            html_result = extract_text_from_html(raw_paper)
+            self.download_stats.html_bytes += html_result.downloaded_bytes
+            full_text = html_result.text
         if full_text is None:
-            full_text = extract_text_from_pdf(raw_paper)
+            pdf_result = extract_text_from_pdf(raw_paper)
+            self.download_stats.pdf_bytes += pdf_result.downloaded_bytes
+            full_text = pdf_result.text
         return Paper(
             source=self.name,
             title=title,
@@ -177,37 +220,46 @@ class ArxivRetriever(BaseRetriever):
         )
 
 
-def extract_text_from_html(paper: ArxivResult) -> str | None:
+def extract_text_from_html(paper: ArxivResult) -> ExtractionResult:
     html_url = paper.entry_id.replace("/abs/", "/html/")
     try:
-        return _extract_text_from_html_worker(html_url)
+        result = _extract_text_from_html_worker(html_url)
+        if result.error:
+            logger.warning(f"HTML extraction failed for {paper.title}: {result.error}")
+        return result
     except Exception as exc:
         logger.warning(f"HTML extraction failed for {paper.title}: {exc}")
-        return None
+        return ExtractionResult(None)
 
 
-def extract_text_from_pdf(paper: ArxivResult) -> str | None:
+def extract_text_from_pdf(paper: ArxivResult) -> ExtractionResult:
     if paper.pdf_url is None:
         logger.warning(f"No PDF URL available for {paper.title}")
-        return None
-    return _run_with_hard_timeout(
+        return ExtractionResult(None)
+    result = _run_with_hard_timeout(
         _extract_text_from_pdf_worker,
         (paper.pdf_url,),
         timeout=PDF_EXTRACT_TIMEOUT,
         operation="PDF extraction",
         paper_title=paper.title,
-    )
+    ) or ExtractionResult(None)
+    if result.error:
+        logger.warning(f"PDF extraction failed for {paper.title}: {result.error}")
+    return result
 
 
-def extract_text_from_tar(paper: ArxivResult) -> str | None:
+def extract_text_from_tar(paper: ArxivResult) -> ExtractionResult:
     source_url = paper.source_url()
     if source_url is None:
         logger.warning(f"No source URL available for {paper.title}")
-        return None
-    return _run_with_hard_timeout(
+        return ExtractionResult(None)
+    result = _run_with_hard_timeout(
         _extract_text_from_tar_worker,
         (source_url, paper.entry_id, paper.title),
         timeout=TAR_EXTRACT_TIMEOUT,
         operation="Tar extraction",
         paper_title=paper.title,
-    )
+    ) or ExtractionResult(None)
+    if result.error:
+        logger.warning(f"Tar extraction failed for {paper.title}: {result.error}")
+    return result

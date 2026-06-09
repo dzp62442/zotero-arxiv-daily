@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import feedparser
 
-from zotero_arxiv_daily.retriever.arxiv_retriever import ArxivRetriever, _run_with_hard_timeout
+from zotero_arxiv_daily.retriever.arxiv_retriever import ArxivRetriever, ExtractionResult, _run_with_hard_timeout
 import zotero_arxiv_daily.retriever.arxiv_retriever as arxiv_retriever
 
 
@@ -52,15 +52,18 @@ def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
     monkeypatch.setattr(arxiv_retriever.arxiv, "Client", FakeClient)
 
     # Skip file downloads in convert_to_paper
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_html", lambda paper: None)
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_pdf", lambda paper: None)
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_tar", lambda paper: None)
+    monkeypatch.setattr(arxiv_retriever, "extract_text_from_html", lambda paper: ExtractionResult(None, 20))
+    monkeypatch.setattr(arxiv_retriever, "extract_text_from_pdf", lambda paper: ExtractionResult(None, 30))
+    monkeypatch.setattr(arxiv_retriever, "extract_text_from_tar", lambda paper: ExtractionResult(None, 10))
 
     retriever = ArxivRetriever(config)
     papers = retriever.retrieve_papers()
 
     assert len(papers) == len(new_entries)
     assert set(p.title for p in papers) == set(e.title for e in new_entries)
+    assert retriever.download_stats.source_tar_bytes == len(new_entries) * 10
+    assert retriever.download_stats.html_bytes == len(new_entries) * 20
+    assert retriever.download_stats.pdf_bytes == len(new_entries) * 30
 
 
 def test_run_with_hard_timeout_returns_value():
