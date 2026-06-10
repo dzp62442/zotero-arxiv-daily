@@ -50,13 +50,17 @@ def render_markdown(
         f"# Zotero arXiv Daily - {today}",
         "",
         f"> Generated at {generated_at.strftime('%Y-%m-%d %H:%M:%S')} | {count_text}",
-        "",
     ]
+    download_summary = _format_download_stats(download_stats)
+    if download_summary:
+        lines.append(f"> Download traffic: {download_summary}")
+    lines.append("")
 
     if not papers:
         lines.extend(["## No Papers Today", "", "Take a rest.", ""])
-        _append_download_stats(lines, download_stats)
         return "\n".join(lines)
+
+    lines.extend(["## 每日 arxiv 推送", ""])
 
     for index, paper in enumerate(papers, start=1):
         score = round(paper.score, 1) if paper.score is not None else "Unknown"
@@ -67,7 +71,7 @@ def render_markdown(
 
         lines.extend(
             [
-                f"## {index}. {_markdown_escape(paper.title)}",
+                f"### {index}. {_markdown_escape(paper.title)}",
                 "",
                 f"- **Source:** {_markdown_escape(paper.source)}",
                 f"- **Relevance:** {score}",
@@ -75,34 +79,30 @@ def render_markdown(
                 f"- **Affiliations:** {affiliations}",
                 f"- **Links:** [Paper]({paper.url}) | [PDF]({pdf_url})",
                 "",
-                "**TL;DR**  ",
-                tldr,
+                f"**TL;DR:** {tldr}",
                 "",
                 "---",
                 "",
             ]
         )
 
-    _append_download_stats(lines, download_stats)
     return "\n".join(lines)
 
 
-def _append_download_stats(lines: list[str], download_stats: dict[str, dict[str, int]] | None) -> None:
+def _format_download_stats(download_stats: dict[str, dict[str, int]] | None) -> str | None:
     if not download_stats:
-        return
+        return None
 
-    lines.extend(["## Download Traffic", ""])
+    parts = []
     for source, stats in download_stats.items():
         total_bytes = stats.get("total_bytes", 0)
-        lines.extend(
-            [
-                f"- **{source}:** {_format_bytes(total_bytes)}",
-                f"  - Source tar: {_format_bytes(stats.get('source_tar_bytes', 0))}",
-                f"  - PDF fallback: {_format_bytes(stats.get('pdf_bytes', 0))}",
-                f"  - HTML fallback: {_format_bytes(stats.get('html_bytes', 0))}",
-            ]
+        parts.append(
+            f"{source} {_format_bytes(total_bytes)} "
+            f"(source tar {_format_bytes(stats.get('source_tar_bytes', 0))}, "
+            f"PDF {_format_bytes(stats.get('pdf_bytes', 0))}, "
+            f"HTML {_format_bytes(stats.get('html_bytes', 0))})"
         )
-    lines.append("")
+    return "; ".join(parts)
 
 
 def write_markdown_report(config: DictConfig, markdown: str, generated_at: datetime | None = None) -> Path:

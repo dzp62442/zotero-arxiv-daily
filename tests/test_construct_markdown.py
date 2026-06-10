@@ -22,9 +22,13 @@ def test_render_markdown_with_papers():
     )
 
     assert "# Zotero arXiv Daily - 2026-06-08" in markdown
-    assert "Download Traffic" in markdown
+    assert "> Download traffic: arxiv 3.5 KiB" in markdown
+    assert "## Download Traffic" not in markdown
+    assert "## 每日 arxiv 推送" in markdown
+    assert "### 1. Sample Paper Title" in markdown
     assert "3.5 KiB" in markdown
     assert "Sample Paper Title" in markdown
+    assert "**TL;DR:** A great paper." in markdown
     assert "A great paper." in markdown
     assert "MIT" in markdown
     assert "[PDF](https://arxiv.org/pdf/2026.00001)" in markdown
