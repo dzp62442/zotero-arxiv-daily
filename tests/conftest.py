@@ -47,7 +47,7 @@ def _base_config():
                 "executor.send_empty=false",
                 "output.mode=markdown",
                 "output.dir=outputs",
-                "output.filename_template=daily-arxiv-{date}.md",
+                'output.filename_template="daily-arxiv-{date}.md"',
             ],
         )
     return cfg
