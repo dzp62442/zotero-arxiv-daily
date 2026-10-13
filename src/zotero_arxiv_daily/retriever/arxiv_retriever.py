@@ -119,10 +119,11 @@ def _extract_text_from_pdf_worker(pdf_url: str) -> ExtractionResult:
 
 def _extract_text_from_html_worker(html_url: str) -> ExtractionResult:
     import trafilatura
+    import requests
 
-    downloaded = trafilatura.fetch_url(html_url)
-    if downloaded is None:
-        raise ValueError(f"Failed to download HTML from {html_url}")
+    resp = requests.get(html_url, timeout=30)
+    resp.raise_for_status()
+    downloaded = resp.text
     text = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
     if not text:
         return ExtractionResult(None, len(downloaded.encode("utf-8")), f"No text extracted from {html_url}")
@@ -151,7 +152,7 @@ class ArxivRetriever(BaseRetriever):
         self.download_stats = ArxivDownloadStats()
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
-        client = arxiv.Client(num_retries=10, delay_seconds=10)
+        client = arxiv.Client(num_retries=5, delay_seconds=60)
         query = '+'.join(self.config.source.arxiv.category)
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
         # Get the latest paper from arxiv rss feed
